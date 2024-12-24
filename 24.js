@@ -59,96 +59,39 @@ function analyse({ initial, gates }) {
     targets.push(...stage)
   }
 
-  const swaps = []
-  const translationIn = {}
-  const translationOut = {}
-  const updatedGates = structuredClone(gates).map(g => ({ ...g, checked: false }))
+  const incorrect = []
+  for (let i = 0; i < MAX; i++) {
+    // Retrieve the first gates from the X and Y inputs
+    const xor = gates.find(g => g.operator === 'XOR' && g.i1 === getKey('x', i) && g.i2 === getKey('y', i))
+    const and = gates.find(g => g.operator === 'AND' && g.i1 === getKey('x', i) && g.i2 === getKey('y', i))
 
-  targets.forEach(target => {
-    // Good inputs and operator
-    const gate = updatedGates.find(gate => sameInputs(gate, target) && gate.operator === target.operator)
-    if (gate) {
-      gate.checked = true
-      const swapped = rename(gate.out, target.out, updatedGates, translationIn, translationOut)
-      if (swapped.length) {
-        swaps.push(...swapped)
-        swapGates(swapped, updatedGates, translationOut)
-      }
-    }
+    // The AND gate must go to a OR gate (except for the first one)
+    const isOr = gates.find(g => g.i1 === and.out || g.i2 === and.out)
+    if (i > 0 && isOr && isOr.operator !== 'OR') incorrect.push(and.out)
 
-    // Xor gate with a Z output
-    if (target.operator === 'XOR' && target.out[0] === 'z') {
-      const index = Number(target.out.slice(1))
-      const sInput = getKey('S', index)
-      const gate = updatedGates.find(g => g.operator === 'XOR' && (g.i1 === sInput || g.i2 === sInput))
-      if (gate) {
-        gate.checked = true
-        if (gate.i1 === sInput) {
-          gate.i1 = gate.i2
-          gate.i2 = sInput
-        }
-        rename(gate.i1, getKey('C', index - 1), updatedGates, translationIn, translationOut)
-        const swapped = rename(gate.i1, getKey('C', index - 1), updatedGates, translationIn, translationOut)
-        if (swapped.length) {
-          swaps.push(...swapped)
-          swapGates(swapped, updatedGates, translationOut)
-        }
-      }
-    }
-  })
+    // The XOR gate is never connector to an OR gate
+    const notOr = gates.find(g => g.i1 === xor.out || g.i2 === xor.out)
+    if (notOr && notOr.operator === 'OR') incorrect.push(xor.out)
 
-  console.log(swaps)
-  findInconsistencies(updatedGates)
-  console.log(updatedGates.filter(g => !g.checked))
-}
-
-function swapGates([wire1, wire2], store, tOut) {
-  // Swap the two names in ouputs
-  /* console.log(`Swapping ${wire1} and ${wire2} (${tOut[wire2]})`)
-  console.log(tOut)
-  const g1 = store.find(g => g.out === wire1 || g.out === tOut[wire1])
-  const g2 = store.find(g => g.out === wire2 || g.out === tOut[wire2])
-  console.log({ g1, g2 })
-  g1.out = wire2
-  g2.out = wire1 */
-}
-function rename(oldName, newName, store, tIn, tOut) {
-  if (oldName === newName) return []
-  if (oldName[0] === 'z' || newName[0] === 'z') {
-    console.log(`Trying to rename ${oldName} in ${newName}`)
-    const translated = tOut[newName] ?? newName
-    return [oldName, translated]
+    // Every gate that points to Z is a XOR
+    const z = gates.find(g => g.out === getKey('z', i))
+    if (z && z.operator !== 'XOR') incorrect.push(z.out)
   }
 
-  tIn[oldName] = newName
-  tOut[newName] = oldName
-  store.forEach(g => {
-    if (g.i1 === oldName) g.i1 = newName
-    if (g.i2 === oldName) g.i2 = newName
-    if (g.out === oldName) g.out = newName
+  // The XOR gates are either from X and Y or to Z
+  const badXor = gates
+    .filter(g => {
+      if (g.operator !== 'XOR') return false
+      return g.out[0] !== 'z' && (g.i1[0] !== 'x' || g.i2[0] !== 'y')
+    })
+    .map(g => g.out)
+  incorrect.push(...badXor)
 
-    const [i1, i2] = [g.i1, g.i2].sort()
-    g.i1 = i1
-    g.i2 = i2
-  })
-  return []
+  console.log({ bad: incorrect.sort().join(',') })
 }
-function sameInputs(g1, g2) {
-  return (g1.i1 === g2.i1 && g1.i2 === g2.i2) || (g1.i1 === g2.i2 && g1.i2 === g2.i1)
-}
+
 function getKey(letter, number) {
   return `${letter}${number.toString().padStart(2, '0')}`
-}
-
-function findInconsistencies(gates) {
-  gates.forEach(({ i1, i2, operator, out }) => {
-    if (operator === 'OR' && out[0] !== 'C') {
-      console.log(`Bade gate ${i1} ${operator} ${i2} -> ${out}`)
-    }
-    if (i1[0] === 'z' || i2[1] === 'z') {
-      console.log(`Bade gate ${i1} ${operator} ${i2} -> ${out}`)
-    }
-  })
 }
 
 function getNumber(state, letter = 'z') {
