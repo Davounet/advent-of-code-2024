@@ -1,6 +1,7 @@
 {
   "name": "aoc",
   "version": "1.0.0",
+  "type": "module",
   "prettier": {
     "printWidth": 120,
     "tabWidth": 2,

@@ -12,10 +12,6 @@ async function main(target) {
   console.log({ number1: z })
 
   analyse({ initial, gates })
-
-  /* const x = getNumber(state, 'x')
-  const y = getNumber(state, 'y')
-  console.log({ x, y, z }) */
 }
 
 function compute({ initial, gates }) {
